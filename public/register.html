@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register - Collaborative Whiteboard</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Firebase SDK via CDN -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-box">
+            <h1>Collaborative Whiteboard</h1>
+            <h2>Create Account</h2>
+            
+            <div id="error-message" class="error-message"></div>
+            
+            <form id="register-form">
+                <div class="form-group">
+                    <label for="display-name">Display Name</label>
+                    <input type="text" id="display-name" name="displayName" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" name="email" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" required minlength="6">
+                    <small>Password must be at least 6 characters</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="confirm-password">Confirm Password</label>
+                    <input type="password" id="confirm-password" name="confirmPassword" required minlength="6">
+                </div>
+                
+                <button type="submit" class="btn btn-primary">Register</button>
+            </form>
+            
+            <div class="auth-links">
+                <p>Already have an account? <a href="login.html">Login</a></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize Firebase with config from your Firebase console
+            const firebaseConfig = {
+                apiKey: "AIzaSyD3CohWN4qbewKvfMGD2hQU7QxoG-BGoG0",
+                authDomain: "collaborative-whiteboard-faf73.firebaseapp.com",
+                projectId: "collaborative-whiteboard-faf73",
+                storageBucket: "collaborative-whiteboard-faf73.firebasestorage.app",
+                messagingSenderId: "254354728721",
+                appId: "1:254354728721:web:87fc6ca93f741ae8428eb0"
+            };
+            
+            // Initialize Firebase
+            firebase.initializeApp(firebaseConfig);
+            
+            // Check if user is already logged in
+            firebase.auth().onAuthStateChanged(function(user) {
+                if (user) {
+                    // User is signed in, redirect to join room page
+                    window.location.href = 'join-room.html';
+                }
+            });
+            
+            // Handle registration form submission
+            const registerForm = document.getElementById('register-form');
+            const errorMessage = document.getElementById('error-message');
+            
+            registerForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const displayName = document.getElementById('display-name').value;
+                const email = document.getElementById('email').value;
+                const password = document.getElementById('password').value;
+                const confirmPassword = document.getElementById('confirm-password').value;
+                
+                // Check if passwords match
+                if (password !== confirmPassword) {
+                    errorMessage.textContent = 'Passwords do not match';
+                    return;
+                }
+                
+                // Create user with email and password
+                firebase.auth().createUserWithEmailAndPassword(email, password)
+                    .then((userCredential) => {
+                        // Update profile with display name
+                        return userCredential.user.updateProfile({
+                            displayName: displayName
+                        });
+                    })
+                    .then(() => {
+                        // Registration successful
+                        window.location.href = 'join-room.html';
+                    })
+                    .catch((error) => {
+                        // Handle errors
+                        errorMessage.textContent = error.message || 'Failed to register. Please try again.';
+                    });
+            });
+        });
+    </script>
+</body>
+</html>

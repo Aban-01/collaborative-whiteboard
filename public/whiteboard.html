@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Whiteboard - Collaborative Whiteboard</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Firebase SDK via CDN -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+    <!-- Socket.IO CDN -->
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <!-- JSZip and FileSaver.js for downloading -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+</head>
+<body>
+    <div class="whiteboard-container">
+        <header class="whiteboard-header">
+            <div>
+                <h1>Collaborative Whiteboard</h1>
+                <span class="room-id">Room ID: <span id="room-id-display"></span></span>
+            </div>
+            <div class="user-controls">
+                <span id="connection-status" class="connection-indicator">Disconnected</span>
+                <span class="user-info">
+                    User: <span id="user-display-name"></span> (ID: <span id="user-id"></span>)
+                </span>
+                <button id="leave-room" class="btn">Leave Room</button>
+                <button id="logout-btn" class="logout-btn">Logout</button>
+            </div>
+        </header>
+
+        <div class="toolbar">
+            <div class="tool-group">
+                <button id="pen-tool" class="tool-btn">Pen</button>
+                <button id="eraser-tool" class="tool-btn">Eraser</button>
+            </div>
+            <div class="tool-group">
+                <label for="color-picker">Color:</label>
+                <input type="color" id="color-picker" value="#000000">
+            </div>
+            <div class="tool-group">
+                <label for="line-width">Width:</label>
+                <input type="range" id="line-width" min="1" max="50" value="5">
+            </div>
+            <div class="tool-group">
+                <button id="clear-canvas" class="clear-btn">Clear Canvas</button>
+                <button id="save-canvas" class="save-btn">Save Page</button>
+                <button id="download-all" class="download-btn">Download All</button>
+            </div>
+        </div>
+
+        <main class="whiteboard-main">
+            <canvas id="whiteboard-canvas"></canvas>
+        </main>
+
+        <div class="debug-panel" id="debug-panel">
+            <h3 class="debug-panel-header">Debug Info</h3>
+            <div>Connection: <span id="connection-status-debug">Disconnected</span></div>
+            <div>User ID: <span id="user-id-debug"></span></div>
+            <div>Room ID: <span id="room-id-debug"></span></div>
+            <div>Room Users: <span id="room-users">0</span></div>
+            <button id="debug-toggle-btn">Hide Debug</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const firebaseConfig = {
+                apiKey: "AIzaSyD3CohWN4qbewKvfMGD2hQU7QxoG-BGoG0",
+                authDomain: "collaborative-whiteboard-faf73.firebaseapp.com",
+                databaseURL: "https://collaborative-whiteboard-faf73-default-rtdb.asia-southeast1.firebasedatabase.app",
+                projectId: "collaborative-whiteboard-faf73",
+                storageBucket: "collaborative-whiteboard-faf73.firebasestorage.app",
+                messagingSenderId: "254354728721",
+                appId: "1:254354728721:web:87fc6ca93f741ae8428eb0",
+                measurementId: "G-4XBTZYFD7R"
+            };
+
+            firebase.initializeApp(firebaseConfig);
+
+            firebase.auth().onAuthStateChanged(function(user) {
+                if (user) {
+                    document.getElementById('user-display-name').textContent = user.displayName || user.email;
+                    document.getElementById('user-id').textContent = user.uid;
+                    initWhiteboard(user);
+                } else {
+                    window.location.href = 'login.html';
+                }
+            });
+
+            function initWhiteboard(user) {
+                const urlParams = new URLSearchParams(window.location.search);
+                const roomId = urlParams.get('room');
+
+                if (!roomId) {
+                    alert('Room ID is required');
+                    window.location.href = 'join-room.html';
+                    return;
+                }
+
+                document.getElementById('room-id-display').textContent = roomId;
+
+                const socket = io();
+
+                user.getIdToken().then(token => {
+                    socket.emit('joinRoom', {
+                        roomId: roomId,
+                        token: token,
+                        displayName: user.displayName || user.email
+                    });
+                }).catch(error => {
+                    console.error('Error getting token:', error);
+                    alert('Authentication error. Please login again.');
+                    window.location.href = 'login.html';
+                });
+
+                const canvas = document.getElementById('whiteboard-canvas');
+                const ctx = canvas.getContext('2d');
+
+                function resizeCanvas() {
+                    const container = document.querySelector('.whiteboard-main');
+                    canvas.width = container.clientWidth;
+                    canvas.height = container.clientHeight;
+                    ctx.fillStyle = '#ffffff';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                }
+
+                resizeCanvas();
+                window.addEventListener('resize', resizeCanvas);
+
+                let drawing = false;
+                let erasing = false;
+                let lastX = 0;
+                let lastY = 0;
+
+                let currentColor = '#000000';
+                let currentWidth = 5;
+
+                const penTool = document.getElementById('pen-tool');
+                const eraserTool = document.getElementById('eraser-tool');
+                const colorPicker = document.getElementById('color-picker');
+                const lineWidth = document.getElementById('line-width');
+                const clearCanvasBtn = document.getElementById('clear-canvas');
+                const saveCanvasBtn = document.getElementById('save-canvas');
+                const downloadAllBtn = document.getElementById('download-all');
+                const leaveRoomBtn = document.getElementById('leave-room');
+                const logoutBtn = document.getElementById('logout-btn');
+
+                penTool.classList.add('active');
+
+                penTool.addEventListener('click', () => {
+                    penTool.classList.add('active');
+                    eraserTool.classList.remove('active');
+                    erasing = false;
+                });
+
+                eraserTool.addEventListener('click', () => {
+                    eraserTool.classList.add('active');
+                    penTool.classList.remove('active');
+                    erasing = true;
+                });
+
+                colorPicker.addEventListener('change', (e) => {
+                    currentColor = e.target.value;
+                });
+
+                lineWidth.addEventListener('change', (e) => {
+                    currentWidth = e.target.value;
+                });
+
+                clearCanvasBtn.addEventListener('click', () => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    resizeCanvas();
+                    socket.emit('clearCanvas');
+                });
+
+                saveCanvasBtn.addEventListener('click', () => {
+                    saveCanvasBtn.disabled = true;
+                    const tempCanvas = document.createElement('canvas');
+                    const tempCtx = tempCanvas.getContext('2d');
+                    const maxWidth = 800;
+                    const scale = maxWidth / canvas.width;
+                    tempCanvas.width = maxWidth;
+                    tempCanvas.height = canvas.height * scale;
+                    tempCtx.drawImage(canvas, 0, 0, tempCanvas.width, tempCanvas.height);
+                    const canvasData = tempCanvas.toDataURL('image/png', 0.7);
+                    socket.emit('saveCanvas', { roomId: roomId, canvasData: canvasData });
+                });
+
+                downloadAllBtn.addEventListener('click', () => {
+                    downloadAllBtn.disabled = true;
+                    socket.emit('fetchSavedCanvases', roomId);
+                });
+
+                leaveRoomBtn.addEventListener('click', () => {
+                    window.location.href = 'join-room.html';
+                });
+
+                logoutBtn.addEventListener('click', () => {
+                    firebase.auth().signOut()
+                        .then(() => {
+                            window.location.href = 'login.html';
+                        })
+                        .catch((error) => {
+                            console.error('Logout error:', error);
+                            alert('Failed to logout. Please try again.');
+                        });
+                });
+
+                const debugPanel = document.getElementById('debug-panel');
+                const debugHeader = document.querySelector('.debug-panel-header');
+                let isDragging = false;
+                let currentX;
+                let currentY;
+                let initialX;
+                let initialY;
+
+                debugHeader.addEventListener('mousedown', startDragging);
+                document.addEventListener('mousemove', drag);
+                document.addEventListener('mouseup', stopDragging);
+
+                function startDragging(e) {
+                    initialX = e.clientX - currentX;
+                    initialY = e.clientY - currentY;
+                    isDragging = true;
+                    debugHeader.style.cursor = 'grabbing';
+                }
+
+                function drag(e) {
+                    if (isDragging) {
+                        e.preventDefault();
+                        currentX = e.clientX - initialX;
+                        currentY = e.clientY - initialY;
+
+                        const viewportWidth = window.innerWidth;
+                        const viewportHeight = window.innerHeight;
+                        const panelWidth = debugPanel.offsetWidth;
+                        const panelHeight = debugPanel.offsetHeight;
+
+                        currentX = Math.max(0, Math.min(currentX, viewportWidth - panelWidth));
+                        currentY = Math.max(0, Math.min(currentY, viewportHeight - panelHeight));
+
+                        debugPanel.style.left = currentX + 'px';
+                        debugPanel.style.top = currentY + 'px';
+                    }
+                }
+
+                function stopDragging() {
+                    isDragging = false;
+                    debugHeader.style.cursor = 'grab';
+                }
+
+                debugPanel.style.left = (window.innerWidth - debugPanel.offsetWidth - 10) + 'px';
+                debugPanel.style.top = '10px';
+                currentX = parseInt(debugPanel.style.left);
+                currentY = parseInt(debugPanel.style.top);
+
+                canvas.addEventListener('mousedown', startDrawing);
+                canvas.addEventListener('touchstart', handleTouch);
+                canvas.addEventListener('mousemove', draw);
+                canvas.addEventListener('touchmove', handleTouch);
+                canvas.addEventListener('mouseup', stopDrawing);
+                canvas.addEventListener('touchend', stopDragging);
+                canvas.addEventListener('mouseout', stopDrawing);
+
+                function startDrawing(e) {
+                    drawing = true;
+                    const rect = canvas.getBoundingClientRect();
+                    lastX = e.clientX - rect.left;
+                    lastY = e.clientY - rect.top;
+                }
+
+                function draw(e) {
+                    if (!drawing) return;
+
+                    const rect = canvas.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+
+                    ctx.beginPath();
+                    ctx.moveTo(lastX, lastY);
+                    ctx.lineTo(x, y);
+                    ctx.strokeStyle = erasing ? '#FFFFFF' : currentColor;
+                    ctx.lineWidth = currentWidth;
+                    ctx.lineCap = 'round';
+                    ctx.stroke();
+
+                    socket.emit('draw', {
+                        x0: lastX / canvas.width,
+                        y0: lastY / canvas.height,
+                        x1: x / canvas.width,
+                        y1: y / canvas.height,
+                        color: erasing ? '#FFFFFF' : currentColor,
+                        width: currentWidth
+                    });
+
+                    lastX = x;
+                    lastY = y;
+                }
+
+                function stopDrawing() {
+                    drawing = false;
+                }
+
+                function handleTouch(e) {
+                    e.preventDefault();
+                    const touch = e.touches[0];
+                    const mouseEvent = new MouseEvent(e.type === 'touchstart' ? 'mousedown' : 'mousemove', {
+                        clientX: touch.clientX,
+                        clientY: touch.clientY
+                    });
+                    canvas.dispatchEvent(mouseEvent);
+                }
+
+                socket.on('connect', () => {
+                    document.getElementById('connection-status').textContent = 'Connected';
+                });
+
+                socket.on('disconnect', () => {
+                    document.getElementById('connection-status').textContent = 'Disconnected';
+                });
+
+                socket.on('roomJoined', (data) => {
+                    console.log('Joined room:', data);
+                    document.getElementById('room-users').textContent = data.users.length;
+                    if (data.canvasData) {
+                        // Optionally load canvas data if stored (not implemented for now)
+                    }
+                });
+
+                socket.on('userJoined', (user) => {
+                    console.log('User joined:', user);
+                    const usersCount = parseInt(document.getElementById('room-users').textContent) + 1;
+                    document.getElementById('room-users').textContent = usersCount;
+                });
+
+                socket.on('userLeft', (user) => {
+                    console.log('User left:', user);
+                    const usersCount = parseInt(document.getElementById('room-users').textContent) - 1;
+                    document.getElementById('room-users').textContent = Math.max(0, usersCount);
+                });
+
+                socket.on('draw', (data) => {
+                    const x0 = data.x0 * canvas.width;
+                    const y0 = data.y0 * canvas.height;
+                    const x1 = data.x1 * canvas.width;
+                    const y1 = data.y1 * canvas.height;
+
+                    ctx.beginPath();
+                    ctx.moveTo(x0, y0);
+                    ctx.lineTo(x1, y1);
+                    ctx.strokeStyle = data.color;
+                    ctx.lineWidth = data.width;
+                    ctx.lineCap = 'round';
+                    ctx.stroke();
+                });
+
+                socket.on('clearCanvas', () => {
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    resizeCanvas();
+                });
+
+                socket.on('joinRoomError', (error) => {
+                    console.error('Join room error:', error);
+                    alert(`Error joining room: ${error.message}`);
+                    window.location.href = 'join-room.html';
+                });
+
+                socket.on('saveCanvasSuccess', () => {
+                    saveCanvasBtn.disabled = false;
+                    alert('Canvas saved successfully!');
+                });
+
+                socket.on('saveError', (error) => {
+                    saveCanvasBtn.disabled = false;
+                    console.error('Save error:', error);
+                    alert(`Error saving canvas: ${error.message}`);
+                });
+
+                socket.on('savedCanvases', (canvases) => {
+                    downloadAllBtn.disabled = false;
+                    if (canvases.length === 0) {
+                        alert('No saved canvases found for this room.');
+                        return;
+                    }
+
+                    const zip = new JSZip();
+                    canvases.forEach((canvas, index) => {
+                        const base64Data = canvas.canvasData.split(',')[1];
+                        const filename = `canvas_${index + 1}_${canvas.savedAt.replace(/[:.]/g, '-')}.png`;
+                        zip.file(filename, base64Data, { base64: true });
+                    });
+
+                    zip.generateAsync({ type: 'blob' }).then((content) => {
+                        saveAs(content, `room_${roomId}_canvases.zip`);
+                    });
+                });
+
+                socket.on('fetchError', (error) => {
+                    downloadAllBtn.disabled = false;
+                    console.error('Fetch error:', error);
+                    alert(`Error fetching saved canvases: ${error.message}`);
+                });
+            }
+        });
+    </script>
+</body>
+</html>

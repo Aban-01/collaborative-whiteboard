@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Join Room - Collaborative Whiteboard</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Firebase SDK via CDN -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-auth-compat.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Collaborative Whiteboard</h1>
+            <div class="user-controls">
+                <div class="user-info">
+                    <span id="user-display-name"></span>
+                </div>
+                <button id="logout-btn" class="logout-btn">Logout</button>
+            </div>
+        </header>
+
+        <div class="room-panel">
+            <h2>Join a Room</h2>
+            
+            <div id="error-message" class="error-message"></div>
+            
+            <form id="room-form">
+                <div class="form-group">
+                    <label for="room-id">Room ID</label>
+                    <input type="text" id="room-id" name="roomId" placeholder="Enter room ID or leave blank to create new room">
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Join/Create Room</button>
+                </div>
+            </form>
+            
+            <div class="room-info">
+                <p>Create a new room by leaving the Room ID blank, or join an existing room by entering its ID.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize Firebase with config from your Firebase console
+            const firebaseConfig = {
+                apiKey: "AIzaSyD3CohWN4qbewKvfMGD2hQU7QxoG-BGoG0",
+                authDomain: "collaborative-whiteboard-faf73.firebaseapp.com",
+                projectId: "collaborative-whiteboard-faf73",
+                storageBucket: "collaborative-whiteboard-faf73.firebasestorage.app",
+                messagingSenderId: "254354728721",
+                appId: "1:254354728721:web:87fc6ca93f741ae8428eb0"
+            };
+            
+            // Initialize Firebase
+            firebase.initializeApp(firebaseConfig);
+            
+            // Elements
+            const userDisplayName = document.getElementById('user-display-name');
+            const logoutBtn = document.getElementById('logout-btn');
+            const roomForm = document.getElementById('room-form');
+            const errorMessage = document.getElementById('error-message');
+            
+            // Check authentication state
+            firebase.auth().onAuthStateChanged(function(user) {
+                if (user) {
+                    // User is signed in
+                    userDisplayName.textContent = user.displayName || user.email;
+                } else {
+                    // User is not signed in, redirect to login
+                    window.location.href = 'login.html';
+                }
+            });
+            
+            // Logout
+            logoutBtn.addEventListener('click', function() {
+                firebase.auth().signOut()
+                    .then(() => {
+                        // Sign-out successful, redirect to login
+                        window.location.href = 'login.html';
+                    })
+                    .catch((error) => {
+                        console.error('Logout error:', error);
+                        errorMessage.textContent = 'Failed to logout. Please try again.';
+                    });
+            });
+            
+            // Handle room form submission
+            roomForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const roomId = document.getElementById('room-id').value.trim() || generateRoomId();
+                
+                // Get current user
+                const user = firebase.auth().currentUser;
+                if (!user) {
+                    errorMessage.textContent = 'You must be logged in to join a room';
+                    setTimeout(() => {
+                        window.location.href = 'login.html';
+                    }, 2000);
+                    return;
+                }
+                
+                // Redirect to whiteboard with room ID
+                window.location.href = `whiteboard.html?room=${roomId}`;
+            });
+            
+            // Generate a random room ID
+            function generateRoomId() {
+                return Math.random().toString(36).substring(2, 10);
+            }
+        });
+    </script>
+</body>
+</html>
