@@ -500,7 +500,7 @@ body {
 
 /* Logout button for navbar */
 .logout-btn {
-  background-color: transparent;
+  background-color: #f32f01;
   border: 1px solid #ddd;
   color: #ffffff;
   padding: 0.5rem 1rem;
