@@ -117,24 +117,3 @@ Future Improvements
 License
 This project is for educational purposes and does not include a specific license. Feel free to modify and use it as needed.
 
----
-
-### Explanation of Sections
-1. **Overview**: A brief description of the project and its core features.
-2. **Project Structure**: A clear layout of the files and their purposes.
-3. **Prerequisites**: Lists the tools and services needed to run the project.
-4. **Setup Instructions**: Step-by-step guide to set up and run the project, including Firebase configuration.
-5. **Usage**: Instructions on how to use the application as an end user.
-6. **Dependencies**: Highlights key libraries and their purposes.
-7. **Development Notes**: Additional context about the project’s implementation.
-8. **Future Improvements**: Suggestions for enhancing the project (e.g., features you might want to add next).
-9. **License**: A placeholder for licensing information (you can update this based on your preferences).
-
----
-
-### How to Add to Your Project
-1. Create a file named `README.md` in the root directory of your project (`collaborative-whiteboard/`).
-2. Copy the content above into `README.md`.
-3. Adjust any details (e.g., Firebase configuration instructions, port numbers, or future improvements) to match your specific setup or plans.
-
-This `README.md` provides a comprehensive guide for anyone interacting with your project, whether they’re running it for the first time or contributing to its development. Let me know if you’d like to adjust or add anything to this documentation!
