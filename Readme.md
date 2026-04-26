@@ -12,23 +12,8 @@ This project is a real-time collaborative whiteboard application that allows mul
 - **User Authentication**: Secure login using Firebase Authentication.
 - **Room-Based Collaboration**: Join or create rooms using a Room ID.
 
-## Project Structure
 
-collaborative-whiteboard/
-├── public/
-│   ├── css/
-│   │   └── style.css         # Styles for the whiteboard UI
-│   ├── whiteboard.html       # Main whiteboard page
-│   ├── login.html            # Login page for Firebase authentication
-│   ├── join-room.html        # Page to join or create a room
-│   └── client.js             # Client-side script for token verification
-├── server.js                 # Server-side logic
-├── serviceAccountKey.json    # Firebase service account key (not included)
-├── package.json              # Project dependencies
-└── README.md                 # Project documentation
-
-
-## Prerequisites
+## Prerequisite
 - **Node.js** (v14.x or higher recommended)
 - **npm** (Node package manager, comes with Node.js)
 - A **Firebase project** with:
